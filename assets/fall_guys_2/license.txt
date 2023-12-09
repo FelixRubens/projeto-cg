@@ -1,0 +1,11 @@
+Model Information:
+* title:	fall guys idle with animation
+* source:	https://sketchfab.com/3d-models/fall-guys-idle-with-animation-f913219a1f1a4afe8c2d3e769a637dd3
+* author:	aa7700892 (https://sketchfab.com/aa7700892)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "fall guys idle with animation" (https://sketchfab.com/3d-models/fall-guys-idle-with-animation-f913219a1f1a4afe8c2d3e769a637dd3) by aa7700892 (https://sketchfab.com/aa7700892) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

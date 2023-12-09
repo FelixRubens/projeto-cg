@@ -1,0 +1,11 @@
+Model Information:
+* title:	Fall Guys Character (Proximamente)
+* source:	https://sketchfab.com/3d-models/fall-guys-character-proximamente-63334022594b4def8689a46f59d35ec1
+* author:	Alexander M (https://sketchfab.com/AlexanderMonserrate)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Fall Guys Character (Proximamente)" (https://sketchfab.com/3d-models/fall-guys-character-proximamente-63334022594b4def8689a46f59d35ec1) by Alexander M (https://sketchfab.com/AlexanderMonserrate) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

@@ -11,7 +11,6 @@ let mixer
 let previouslyAnimation = null
 let selectedAnimation = 0
 let gltfAnimations
-let action
 
 const spotLights = []
 const allActions = []

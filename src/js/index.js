@@ -10,7 +10,16 @@ let fallGuy
 let mixer
 let previouslyAnimation = null
 let selectedAnimation = 0
+let jumpAnimation
+let lendingAnimation
 let gltfAnimations
+let keysPressed = []
+let speed = 0.035
+let isJumping = 0
+let jumpSpeed = 0.18
+let gravity = -0.0004
+let delta = 1
+let i = 0
 
 const spotLights = []
 const allActions = []
@@ -22,14 +31,24 @@ createAmbientLigth()
 createSpotLight(0, 30, 0)
 loadCharacter()
 animate()
+checkInputs()
 
 async function changeAnimation() {
+  if (isJumping === 1){
+    if (allActions[selectedAnimation]) allActions[selectedAnimation].reset().fadeOut(0.2)
+    if (allActions[jumpAnimation]) allActions[jumpAnimation].reset()
+      .setEffectiveTimeScale(.3)
+      .setEffectiveWeight(1)
+      .fadeIn(0.5)
+      .play()
+    isJumping = 2
+  } else if (isJumping === 2) return
 
-  if (previouslyAnimation) 
-    if (previouslyAnimation === selectedAnimation) return
-  
-  allActions[previouslyAnimation].fadeOut(0.5)
-  allActions[selectedAnimation].reset()
+  if (previouslyAnimation === selectedAnimation) return
+
+
+  if (allActions[previouslyAnimation]) allActions[previouslyAnimation].reset().fadeOut(0.5)
+  if (allActions[selectedAnimation]) allActions[selectedAnimation].reset()
     .setEffectiveTimeScale(1)
     .setEffectiveWeight(1)
     .fadeIn(0.5)
@@ -37,10 +56,34 @@ async function changeAnimation() {
 }
 
 function startAnimation() {
-  mixer = new THREE.AnimationMixer( fallGuy )
-  
+  mixer = new THREE.AnimationMixer(fallGuy)
   gltfAnimations.forEach(a => {
     allActions.push(mixer.clipAction(a))
+  })
+
+  
+  jumpAnimation = findAnimation('FG_Jump_Start_A')
+  lendingAnimation = findAnimation('FG_Landing_A')
+  allActions[jumpAnimation].loop = THREE.LoopOnce
+  allActions[lendingAnimation].loop = THREE.LoopOnce
+
+  mixer.addEventListener('finished', (event) => {
+    if (event.action._clip.name === 'FG_Jump_Start_A') {
+      allActions[lendingAnimation].reset().setEffectiveTimeScale(0.7).play()
+      fallGuy.position.y = offSet
+      isJumping = 0
+      gravity = -0.0004
+      jumpSpeed = 0.18
+      delta = 1
+      i = 0
+    }
+
+    if (event.action._clip.name === 'FG_Landing_A') {
+      allActions[selectedAnimation].reset()
+        .setEffectiveTimeScale(0.7)
+        .play()
+    }
+
   })
 
   allActions[0].play()
@@ -116,37 +159,93 @@ function loadCharacter () {
   })
 }
 
+function checkInputs() {
+  setInterval(() => {
+    if (isJumping !== 0) {
+      jumpSpeed = jumpSpeed + gravity * i
+      fallGuy.position.y += jumpSpeed * delta
+      if (jumpSpeed <= 0) {
+        jumpSpeed = 0
+        delta *= -1
+        gravity *= -1
+      }
+      i++
+    }
+
+    for (const key of keysPressed) {
+      switch (key.toLowerCase()) {
+        case 'w':
+          if (!isJumping) {
+            previouslyAnimation = selectedAnimation
+            if (keysPressed.includes('shift')) {
+              selectedAnimation = findAnimation('FG_Run_A')
+              speed = 0.1
+            } else {
+              selectedAnimation = findAnimation('FG_Walk_A')
+            }
+          }
+          fallGuy.position.x += speed * Math.sin(fallGuy.rotation.y)
+          fallGuy.position.z += speed * Math.cos(fallGuy.rotation.y)
+          changeAnimation()
+          break
+        case 's':
+          if (!isJumping) {
+            previouslyAnimation = selectedAnimation
+            selectedAnimation = findAnimation('FG_Walk_Backwards_A')
+          }
+          fallGuy.position.x -= speed * Math.sin(fallGuy.rotation.y)
+          fallGuy.position.z -= speed * Math.cos(fallGuy.rotation.y)
+          changeAnimation()
+          break
+        case 'a':
+          fallGuy.rotation.y += 0.05
+          break
+        case 'd':
+          fallGuy.rotation.y -= 0.05
+          break
+        case 'shift':
+          if (keysPressed.includes('w') && !isJumping) {
+            previouslyAnimation = selectedAnimation
+            selectedAnimation = findAnimation('FG_Run_A')
+            changeAnimation()
+            speed = 0.1
+          }
+          break
+        case ' ':
+          if (!isJumping) {
+            if (fallGuy.position.y > offSet) break
+            isJumping = 1
+            changeAnimation()
+          }
+          break
+      }
+    }
+  }, 1)
+}
+
 window.addEventListener('keydown', (event) => {
-  switch (event.key) {
-    case 'w':
-      fallGuy.position.x += 0.05 * Math.sin(fallGuy.rotation.y)
-      fallGuy.position.z += 0.05 * Math.cos(fallGuy.rotation.y)
-      previouslyAnimation = selectedAnimation
-      selectedAnimation = findAnimation('FG_Walk_A')
-      changeAnimation()
-      break
-    case 'a':
-      fallGuy.rotation.y += 0.05
-      break
-    case 'd':
-      fallGuy.rotation.y -= 0.05
-      break
-    case 'v':
-      previouslyAnimation = selectedAnimation
-      selectedAnimation = findAnimation('FG_Emote_RobotDance_A')
-      changeAnimation()
+  if (!keysPressed.includes(event.key.toLowerCase())) {
+    keysPressed.push(event.key.toLowerCase())
   }
 })
 
 window.addEventListener('keyup', (event) => {
-  switch (event.key) {
+  keysPressed = keysPressed.filter(key => key != event.key.toLowerCase())
+  switch (event.key.toLowerCase()) {
     case 'w':
+      speed = 0.05
       previouslyAnimation = selectedAnimation
       selectedAnimation = findAnimation('FG_Idle_A')
       changeAnimation()
       break
+    case 'shift':
+      previouslyAnimation = selectedAnimation
+      if (keysPressed.includes('w')) selectedAnimation = findAnimation('FG_Walk_A')
+      else selectedAnimation = findAnimation('FG_Idle_A')
+      speed = 0.05
+      changeAnimation()
+      break
   }
-
 })
 
 function animate() {
@@ -157,7 +256,7 @@ function animate() {
 
   if (fallGuy) {
     if (Math.abs(fallGuy.position.x) > 30 || Math.abs(fallGuy.position.z) > 30) {
-      fallGuy.position.set(0, 0, 0)
+      fallGuy.position.set(0, offSet, 0)
     }
   }
 }

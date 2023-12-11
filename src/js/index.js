@@ -2,10 +2,20 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { AnimationsMap } from './animations.js'
+import { Colors } from './colors.js'
+import * as CANNON from 'cannon-es'
 
+let plane
 let scene
+let world
 let camera
+let controls
 let renderer
+let sphereShape
+let sphereBody
+let planeBody
+let planeShape
+let background
 let fallGuy
 let mixer
 let previouslyAnimation = null
@@ -16,28 +26,74 @@ let gltfAnimations
 let keysPressed = []
 let speed = 0.035
 let isJumping = 0
-let jumpSpeed = 0.18
-let gravity = -0.0004
-let delta = 1
-let i = 0
+let offSet =  -5.0
+let clock = new THREE.Clock()
+let oldElapsedTime = 0
+let colors = [...Colors]
+let tiles = []
+let tilesBody = []
+let selectedTilesColor = []
 
 const spotLights = []
 const allActions = []
-const offSet = -5.5
 
 createScene()
 createFloor()
 createAmbientLigth()
-createSpotLight(0, 30, 0)
+createSpotLight(0, 40, 0)
 loadCharacter()
 animate()
 checkInputs()
+game()
 
-async function changeAnimation() {
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function paintTiles(colors, firstPaint = false) {
+  for (let i = 0; i < tiles.length; i++){
+    let tileColor = colors[Math.floor(Math.random()*colors.length)]
+    tiles[i].material.color.setHex(tileColor)
+    if (firstPaint) selectedTilesColor.push(tileColor)
+  }
+}
+
+function removeWrongTiles(color) {
+  let tilesToRemove = []
+  tiles.forEach((_, index) => {
+    if (selectedTilesColor[index] !== color) tilesToRemove.push(index)
+  })
+
+  
+  for (let index of tilesToRemove) {
+    let removedTile = tiles[index]
+    let removedTileBody = tilesBody[index]
+    scene.remove(removedTile)
+    world.removeBody(removedTileBody)
+  }
+  console.log(tiles.length)
+  console.log(tilesBody.length)
+}
+
+async function game() {
+  await sleep(2000)
+  paintTiles(colors, true)
+  await sleep(2000)
+  paintTiles([0xcccccc])
+  await sleep(2000)
+  let selectedColor = colors[Math.floor(Math.random()*colors.length)]
+  paintTiles([selectedColor])
+  await sleep(2000)
+  removeWrongTiles(selectedColor)
+  selectedTilesColor = []
+  //game()
+}
+
+function changeAnimation() {
   if (isJumping === 1){
     if (allActions[selectedAnimation]) allActions[selectedAnimation].reset().fadeOut(0.2)
     if (allActions[jumpAnimation]) allActions[jumpAnimation].reset()
-      .setEffectiveTimeScale(.3)
+      .setEffectiveTimeScale(.6)
       .setEffectiveWeight(1)
       .fadeIn(0.5)
       .play()
@@ -70,12 +126,7 @@ function startAnimation() {
   mixer.addEventListener('finished', (event) => {
     if (event.action._clip.name === 'FG_Jump_Start_A') {
       allActions[lendingAnimation].reset().setEffectiveTimeScale(0.7).play()
-      fallGuy.position.y = offSet
       isJumping = 0
-      gravity = -0.0004
-      jumpSpeed = 0.18
-      delta = 1
-      i = 0
     }
 
     if (event.action._clip.name === 'FG_Landing_A') {
@@ -92,36 +143,77 @@ function startAnimation() {
 function createScene() {
   scene = new THREE.Scene()
 
-  camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.01, 2000)
-  camera.position.set(18, 7, 12)
+  world = new CANNON.World()
+  world.gravity.set(0, -9.82, 0)
 
-  renderer = new THREE.WebGLRenderer({ antialias: true })
-  renderer.setSize( window.innerWidth, window.innerHeight )
+  const canvas = document.querySelector('.webgl')
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+  renderer.setSize(window.innerWidth, window.innerHeight)
   renderer.shadowMap.enabled = true
   renderer.gammaOutput = true
   document.body.appendChild( renderer.domElement )
-  const axesHelper = new THREE.AxesHelper(5)
-  scene.add( axesHelper );
-  new OrbitControls( camera, renderer.domElement )
+
+  background = new THREE.TextureLoader().load('../../assets/background/fundo.png')
+  
+  let skyGeometry = new THREE.SphereGeometry(1000)
+  let skyMaterial = new THREE.MeshStandardMaterial({ map: background, side: THREE.DoubleSide })
+  let sky = new THREE.Mesh(skyGeometry, skyMaterial)
+  sky.rotation.x = Math.PI / 2
+  scene.add(sky)
+
+  // const axesHelper = new THREE.AxesHelper(5)
+  // scene.add( axesHelper )
+
+  camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.01, 2000)
+  controls = new OrbitControls( camera, renderer.domElement )
+  camera.position.set(18, 7, 12)
+  controls.minPolarAngle = Math.PI / 3
+  controls.maxPolarAngle = 0
+  controls.enablePan = false
+  controls.update()
 }
   
 function createFloor() {
-  const planeGeometry = new THREE.PlaneGeometry( 100, 100 )
-  const planeMaterial = new THREE.MeshStandardMaterial({ color: 0xbcbcbc })
+  let tilePosition = { x: (5*4.5 + 4*0.5 + 0.25), z: (5*4.5 + 4*0.5 + 0.25) }
+  for (let i = 0; i < 10; i++) {
+    for (let j = 0; j < 10; j++) {
+      const planeGeometry = new THREE.BoxGeometry(4.5, 4.5, 1)
+      const planeMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, side: THREE.DoubleSide })
+      
+      const plane = new THREE.Mesh( planeGeometry, planeMaterial )
+      plane.rotation.x = -Math.PI / 2
+      plane.receiveShadow = true
+      plane.position.x = tilePosition.x
+      plane.position.z = tilePosition.z
+      scene.add( plane )
+      const planeShape = new CANNON.Box(new CANNON.Vec3(3, 3, 0.1))
+      const planeBody = new CANNON.Body({
+        mass: 0,
+      })
+      
+      planeBody.quaternion.setFromAxisAngle(new CANNON.Vec3(-1, 0, 0), Math.PI * 0.5)
+      planeBody.position.x = tilePosition.x
+      planeBody.position.z = tilePosition.z
 
-  const plane = new THREE.Mesh( planeGeometry, planeMaterial )
-  plane.rotation.x = -Math.PI / 2
-  plane.receiveShadow = true
-  scene.add( plane )
+      planeBody.addShape(planeShape)
+      world.addBody(planeBody)
+      tiles.push(plane)
+      tilesBody.push(planeBody)
+
+      tilePosition.z -= 5
+    }
+    tilePosition.z = (5*4.5 + 4*0.5 + 0.25)
+    tilePosition.x -= 5
+  }
 }
 
 function createAmbientLigth() {
-  const ambientLight = new THREE.AmbientLight( 0xffffff, 1.0)
-  scene.add( ambientLight )
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1.0)
+  scene.add(ambientLight)
 }
 
-function createSpotLight (x, y, z) {
-  const spotLight = new THREE.SpotLight( 0xffffff, 1)
+function createSpotLight (x, y, z, color = 0xffffff) {
+  const spotLight = new THREE.SpotLight(color, 1)
   spotLight.position.set(x, y, z)
   spotLight.angle = Math.PI / 6
   spotLight.penumbra = 0.5
@@ -155,23 +247,23 @@ function loadCharacter () {
     fallGuy.rotation.y = Math.PI/2
     startAnimation()
     scene.add(fallGuy)
+
+    sphereShape = new CANNON.Sphere(0)
+    sphereBody = new CANNON.Body({
+      mass: 1,
+      position: new CANNON.Vec3(0, 5, 0),
+      shape: sphereShape,
+    })
+
+    world.addBody(sphereBody)
+
+
     spotLights[0].target = fallGuy
   })
 }
 
 function checkInputs() {
   setInterval(() => {
-    if (isJumping !== 0) {
-      jumpSpeed = jumpSpeed + gravity * i
-      fallGuy.position.y += jumpSpeed * delta
-      if (jumpSpeed <= 0) {
-        jumpSpeed = 0
-        delta *= -1
-        gravity *= -1
-      }
-      i++
-    }
-
     for (const key of keysPressed) {
       switch (key.toLowerCase()) {
         case 'w':
@@ -184,8 +276,8 @@ function checkInputs() {
               selectedAnimation = findAnimation('FG_Walk_A')
             }
           }
-          fallGuy.position.x += speed * Math.sin(fallGuy.rotation.y)
-          fallGuy.position.z += speed * Math.cos(fallGuy.rotation.y)
+          sphereBody.position.x += speed * Math.sin(fallGuy.rotation.y)
+          sphereBody.position.z += speed * Math.cos(fallGuy.rotation.y)
           changeAnimation()
           break
         case 's':
@@ -193,8 +285,8 @@ function checkInputs() {
             previouslyAnimation = selectedAnimation
             selectedAnimation = findAnimation('FG_Walk_Backwards_A')
           }
-          fallGuy.position.x -= speed * Math.sin(fallGuy.rotation.y)
-          fallGuy.position.z -= speed * Math.cos(fallGuy.rotation.y)
+          sphereBody.position.x -= speed * Math.sin(fallGuy.rotation.y)
+          sphereBody.position.z -= speed * Math.cos(fallGuy.rotation.y)
           changeAnimation()
           break
         case 'a':
@@ -213,7 +305,7 @@ function checkInputs() {
           break
         case ' ':
           if (!isJumping) {
-            if (fallGuy.position.y > offSet) break
+            sphereBody.velocity.set(0, 8, 0)
             isJumping = 1
             changeAnimation()
           }
@@ -248,15 +340,26 @@ window.addEventListener('keyup', (event) => {
   }
 })
 
+window.addEventListener('change', (event) => {
+  console.log(event)
+})
+
 function animate() {
   requestAnimationFrame( animate )
-  renderer.render( scene, camera )
-
   if (mixer) mixer.update(0.02)
+  controls.update()
 
+  let ElapsedTime = clock.getElapsedTime();
+  let deltaTime = ElapsedTime - oldElapsedTime;
+  oldElapsedTime = deltaTime;
+
+  if (world) world.step(1 / 60, deltaTime, 3);
+  
   if (fallGuy) {
-    if (Math.abs(fallGuy.position.x) > 30 || Math.abs(fallGuy.position.z) > 30) {
-      fallGuy.position.set(0, offSet, 0)
-    }
+    if (sphereBody) fallGuy.position.copy({ x: sphereBody.position.x, y: sphereBody.position.y + offSet, z: sphereBody.position.z })
+    if (planeBody) plane.position.copy(planeBody.position)
   }
+
+  
+  renderer.render( scene, camera )
 }

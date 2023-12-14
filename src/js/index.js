@@ -14,7 +14,7 @@ let renderer
 let sphereShape
 let sphereBody
 let planeBody
-let planeShape
+let sky
 let background
 let fallGuy
 let mixer
@@ -40,7 +40,7 @@ const allActions = []
 createScene()
 createFloor()
 createAmbientLigth()
-createSpotLight(0, 40, 0)
+createSpotLight(0, 10, 0)
 loadCharacter()
 animate()
 checkInputs()
@@ -75,18 +75,30 @@ function removeWrongTiles(color) {
   console.log(tilesBody.length)
 }
 
+function verifyGameOver() {
+  if (fallGuy.position.y < -10) {
+    window.alert("Game Over!")
+
+    return true
+  }
+
+  return false
+}
+
 async function game() {
   await sleep(2000)
   paintTiles(colors, true)
-  await sleep(2000)
+  await sleep(5000)
   paintTiles([0xcccccc])
-  await sleep(2000)
+  await sleep(1000)
   let selectedColor = colors[Math.floor(Math.random()*colors.length)]
   paintTiles([selectedColor])
-  await sleep(2000)
+  await sleep(5000)
   removeWrongTiles(selectedColor)
   selectedTilesColor = []
-  //game()
+  await sleep(1000)
+  if (verifyGameOver()) location.reload()
+  else game()
 }
 
 function changeAnimation() {
@@ -127,6 +139,7 @@ function startAnimation() {
     if (event.action._clip.name === 'FG_Jump_Start_A') {
       allActions[lendingAnimation].reset().setEffectiveTimeScale(0.7).play()
       isJumping = 0
+      speed = 0.1
     }
 
     if (event.action._clip.name === 'FG_Landing_A') {
@@ -149,28 +162,42 @@ function createScene() {
   const canvas = document.querySelector('.webgl')
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.setSize(window.innerWidth, window.innerHeight)
+  renderer.setPixelRatio(window.devicePixelRatio);
   renderer.shadowMap.enabled = true
   renderer.gammaOutput = true
-  document.body.appendChild( renderer.domElement )
+  document.body.appendChild(renderer.domElement)
 
-  background = new THREE.TextureLoader().load('../../assets/background/fundo.png')
+  background = new THREE.TextureLoader().load('../../assets/background/113.jpg')
   
   let skyGeometry = new THREE.SphereGeometry(1000)
   let skyMaterial = new THREE.MeshStandardMaterial({ map: background, side: THREE.DoubleSide })
-  let sky = new THREE.Mesh(skyGeometry, skyMaterial)
+  sky = new THREE.Mesh(skyGeometry, skyMaterial)
   sky.rotation.x = Math.PI / 2
   scene.add(sky)
 
   // const axesHelper = new THREE.AxesHelper(5)
-  // scene.add( axesHelper )
+  // scene.add(axesHelper)
 
   camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.01, 2000)
-  controls = new OrbitControls( camera, renderer.domElement )
-  camera.position.set(18, 7, 12)
+  controls = new OrbitControls(camera, renderer.domElement)
+  camera.position.set(358, 7, 352)
+  aproximateCamera(18, 7, 12)
   controls.minPolarAngle = Math.PI / 3
   controls.maxPolarAngle = 0
   controls.enablePan = false
   controls.update()
+}
+
+async function aproximateCamera(toX, toY, toZ) {
+  let actualX = camera.position.x
+  let actualZ = camera.position.z
+
+  while (actualX > toX) {
+    actualX -= 4
+    actualZ -= 4
+    camera.position.set(actualX, toY, actualZ)
+    await sleep(1)
+  }
 }
   
 function createFloor() {
@@ -180,12 +207,12 @@ function createFloor() {
       const planeGeometry = new THREE.BoxGeometry(4.5, 4.5, 1)
       const planeMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, side: THREE.DoubleSide })
       
-      const plane = new THREE.Mesh( planeGeometry, planeMaterial )
+      const plane = new THREE.Mesh(planeGeometry, planeMaterial)
       plane.rotation.x = -Math.PI / 2
       plane.receiveShadow = true
       plane.position.x = tilePosition.x
       plane.position.z = tilePosition.z
-      scene.add( plane )
+      scene.add(plane)
       const planeShape = new CANNON.Box(new CANNON.Vec3(3, 3, 0.1))
       const planeBody = new CANNON.Body({
         mass: 0,
@@ -208,7 +235,7 @@ function createFloor() {
 }
 
 function createAmbientLigth() {
-  const ambientLight = new THREE.AmbientLight(0xffffff, 1.0)
+  const ambientLight = new THREE.AmbientLight(0xffffff, 1)
   scene.add(ambientLight)
 }
 
@@ -223,7 +250,7 @@ function createSpotLight (x, y, z, color = 0xffffff) {
   spotLight.shadow.mapSize.width = 1024
   spotLight.shadow.mapSize.height = 1024
   spotLight.shadow.camera.near = 1
-  spotLight.shadow.camera.far = 60
+  spotLight.shadow.camera.far = 600
   scene.add(spotLight)
   spotLights.push(spotLight)
 }
@@ -237,16 +264,20 @@ function loadCharacter () {
   loader.load('../../assets/fall_guys_1/scene.gltf', (gltf) => {
     gltfAnimations = gltf.animations
     fallGuy = gltf.scene
+
     fallGuy.traverse((child) => {
       child.frustumCulled = false
       if (child.isMesh) {
         child.castShadow = true
       }
     })
+
     fallGuy.position.y = offSet
     fallGuy.rotation.y = Math.PI/2
-    startAnimation()
+
     scene.add(fallGuy)
+    
+    startAnimation()
 
     sphereShape = new CANNON.Sphere(0)
     sphereBody = new CANNON.Body({
@@ -269,6 +300,7 @@ function checkInputs() {
         case 'w':
           if (!isJumping) {
             previouslyAnimation = selectedAnimation
+            speed = 0.035
             if (keysPressed.includes('shift')) {
               selectedAnimation = findAnimation('FG_Run_A')
               speed = 0.1
@@ -295,6 +327,11 @@ function checkInputs() {
         case 'd':
           fallGuy.rotation.y -= 0.05
           break
+        case 'v':
+          previouslyAnimation = selectedAnimation
+          selectedAnimation = findAnimation('FG_Emote_RobotDance_A')
+          changeAnimation()
+          break
         case 'shift':
           if (keysPressed.includes('w') && !isJumping) {
             previouslyAnimation = selectedAnimation
@@ -307,6 +344,7 @@ function checkInputs() {
           if (!isJumping) {
             sphereBody.velocity.set(0, 8, 0)
             isJumping = 1
+            speed = 0.2
             changeAnimation()
           }
           break
@@ -345,21 +383,20 @@ window.addEventListener('change', (event) => {
 })
 
 function animate() {
-  requestAnimationFrame( animate )
+  requestAnimationFrame(animate)
   if (mixer) mixer.update(0.02)
   controls.update()
 
-  let ElapsedTime = clock.getElapsedTime();
-  let deltaTime = ElapsedTime - oldElapsedTime;
-  oldElapsedTime = deltaTime;
+  let ElapsedTime = clock.getElapsedTime()
+  let deltaTime = ElapsedTime - oldElapsedTime
+  oldElapsedTime = deltaTime
 
-  if (world) world.step(1 / 60, deltaTime, 3);
+  if (world) world.step(1 / 60, deltaTime, 3)
   
   if (fallGuy) {
     if (sphereBody) fallGuy.position.copy({ x: sphereBody.position.x, y: sphereBody.position.y + offSet, z: sphereBody.position.z })
     if (planeBody) plane.position.copy(planeBody.position)
   }
-
   
-  renderer.render( scene, camera )
+  renderer.render(scene, camera)
 }
